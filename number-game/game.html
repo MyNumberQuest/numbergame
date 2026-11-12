@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>숫자 맞추기 게임</title>
+  <style>
+      body {
+          font-family: sans-serif;
+          background-color: #f0f8ff;
+          margin: 0;
+          padding: 40px 20px;
+      }
+      .card {
+          max-width: 420px;
+          margin: 0 auto;
+          background-color: white;
+          padding: 30px;
+          border-radius: 16px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          text-align: center;
+      }
+      h1 {
+          color: #2a6fdb;
+      }
+      input {
+          font-size: 18px;
+          padding: 10px;
+          width: 120px;
+          text-align: center;
+          border: 2px solid #2a6fdb;
+          border-radius: 8px;
+      }
+      button {
+          background-color: #2a6fdb;
+          color: white;
+          border: none;
+          padding: 12px 24px;
+          font-size: 16px;
+          border-radius: 8px;
+          cursor: pointer;
+          margin: 10px 4px 0;
+      }
+      button:hover {
+          background-color: #1b4fa0;
+      }
+      .level-buttons button {
+          background-color: #cfdcf2;
+          color: #2a6fdb;
+          padding: 8px 14px;
+          font-size: 15px;
+          margin: 4px;
+      }
+      .level-buttons button.active {
+          background-color: #2a6fdb;
+          color: white;
+      }
+      .level-buttons button.locked {
+          background-color: #e5e5e5;
+          color: #999;
+          cursor: not-allowed;
+      }
+      button.small {
+          background-color: transparent;
+          color: #999;
+          font-size: 13px;
+          padding: 4px 8px;
+          margin-top: 20px;
+      }
+      button.small:hover {
+          background-color: transparent;
+          color: #e33;
+      }
+      #result {
+          font-size: 20px;
+          font-weight: bold;
+          min-height: 30px;
+      }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>🎯 숫자 맞추기</h1>
+
+  <div class="level-buttons" id="levelButtons"></div>
+
+  <p id="info"></p>
+
+  <input type="number" id="guess" placeholder="숫자 입력">
+  <button onclick="checkGuess()">확인</button>
+
+  <p id="result"></p>
+  <p id="tries"></p>
+
+  <button onclick="resetGame()">다시 시작</button>
+  <br>
+  <button class="small" onclick="resetProgress()">진행 상황 초기화</button>
+</div>
+
+<script>
+  const LEVELS = [
+    { key: "easy",   name: "쉬움",   max: 50,    maxTries: 5 },
+    { key: "normal", name: "보통",   max: 100,   maxTries: 8 },
+    { key: "hard",   name: "어려움", max: 500,   maxTries: 9 },
+    { key: "hell",   name: "지옥",   max: 2500, maxTries: 12 },
+    { key: "god",    name: "신",     max: 5000, maxTries: 15 }
+  ];
+
+  let currentIndex = 0;
+  let unlocked = 0;      // 열려 있는 가장 높은 난이도 번호 (0 = 쉬움만 열림)
+  let answer = 0;
+  let tries = 0;
+  let gameOver = false;
+  let resetTimer = null;
+
+  function loadProgress() {
+    try {
+      const saved = Number(localStorage.getItem("unlockedLevel"));
+      if (saved >= 0 && saved < LEVELS.length) {
+        unlocked = saved;
+      }
+    } catch (e) {
+      unlocked = 0;
+    }
+  }
+
+  function saveProgress() {
+    try {
+      localStorage.setItem("unlockedLevel", String(unlocked));
+    } catch (e) {
+      // 저장이 안 되어도 게임은 계속 진행돼요
+    }
+  }
+
+  function renderLevelButtons() {
+    const box = document.getElementById("levelButtons");
+    box.innerHTML = "";
+
+    LEVELS.forEach(function (level, index) {
+      const btn = document.createElement("button");
+
+      if (index > unlocked) {
+        btn.textContent = "🔒 " + level.name;
+        btn.classList.add("locked");
+      } else {
+        btn.textContent = level.name;
+        btn.onclick = function () { setLevel(index); };
+      }
+
+      if (index === currentIndex) {
+        btn.classList.add("active");
+      }
+
+      box.appendChild(btn);
+    });
+  }
+
+  function setLevel(index) {
+    currentIndex = index;
+    resetGame();
+  }
+
+  function resetGame() {
+    if (resetTimer !== null) {
+      clearTimeout(resetTimer);
+      resetTimer = null;
+    }
+
+    const level = LEVELS[currentIndex];
+    answer = Math.floor(Math.random() * level.max) + 1;
+    tries = 0;
+    gameOver = false;
+
+    document.getElementById("info").textContent =
+      "[" + level.name + "] 1부터 " + level.max + " 사이의 숫자를 맞춰보세요!";
+    document.getElementById("result").textContent = "";
+    document.getElementById("tries").textContent =
+      "시도 횟수: 0/" + level.maxTries + "번";
+
+    renderLevelButtons();
+
+    const input = document.getElementById("guess");
+    input.disabled = false;
+    input.value = "";
+    input.focus();
+  }
+
+  function checkGuess() {
+    if (gameOver) {
+      return;
+    }
+
+    const level = LEVELS[currentIndex];
+    const input = document.getElementById("guess");
+    const result = document.getElementById("result");
+    const guess = Number(input.value);
+
+    if (input.value === "" || guess < 1 || guess > level.max) {
+      result.textContent = "1~" + level.max + " 사이의 숫자를 입력하세요!";
+      return;
+    }
+
+    tries = tries + 1;
+    document.getElementById("tries").textContent =
+      "시도 횟수: " + tries + "/" + level.maxTries + "번";
+
+    if (guess === answer) {
+      let message = "🎉 정답! " + tries + "번 만에 맞췄어요!";
+
+      if (currentIndex === unlocked && currentIndex < LEVELS.length - 1) {
+        unlocked = unlocked + 1;
+        saveProgress();
+        renderLevelButtons();
+        message = message + " 🔓 '" + LEVELS[unlocked].name + "' 난이도가 열렸어요!";
+      } else if (currentIndex === LEVELS.length - 1) {
+        message = message + " 👑 모든 난이도 클리어! 축하합니다🙌";
+      }
+
+      result.textContent = message;
+      gameOver = true;
+      input.disabled = true;
+      return;
+    }
+
+    if (tries >= level.maxTries) {
+      result.textContent =
+        "😢 게임 종료! 정답은 " + answer + "였어요. 3초 뒤 처음(쉬움)부터 다시 시작해요.";
+      gameOver = true;
+      input.disabled = true;
+
+      resetTimer = setTimeout(function () {
+        unlocked = 0;
+        currentIndex = 0;
+        saveProgress();
+        resetGame();
+      }, 3000);
+      return;
+    }
+
+    if (guess < answer) {
+      result.textContent = "⬆️ 더 큰 숫자예요!";
+    } else {
+      result.textContent = "⬇️ 더 작은 숫자예요!";
+    }
+
+    input.value = "";
+    input.focus();
+  }
+
+  function resetProgress() {
+    if (confirm("진행 상황을 처음으로 되돌릴까요?")) {
+      unlocked = 0;
+      currentIndex = 0;
+      saveProgress();
+      resetGame();
+    }
+  }
+
+  loadProgress();
+  resetGame();
+</script>
+</body>
+</html>
